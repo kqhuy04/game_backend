@@ -6,6 +6,7 @@ from sqlalchemy import text
 from app.core.database import get_db
 from app.routers import auth, character, afk, market, guild, world_boss
 import logging
+import subprocess
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -13,6 +14,17 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
 app = FastAPI(title="TinyWorld API", version="0.1.0")
+
+@app.on_event("startup")
+async def run_migrations():
+    logger.info("Running migrations...")
+    result = subprocess.run(
+        ["alembic", "upgrade", "head"],
+        capture_output=True, text=True
+    )
+    logger.info(result.stdout)
+    if result.returncode != 0:
+        logger.error(result.stderr)
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -29,11 +41,8 @@ app.include_router(market.router)
 app.include_router(guild.router)
 app.include_router(world_boss.router)
 
-from sqlalchemy import text
-
 @app.get("/health")
 async def health(db: AsyncSession = Depends(get_db)):
-    # Kiểm tra DB connection
     try:
         await db.execute(text("SELECT 1"))
         db_status = "ok"
