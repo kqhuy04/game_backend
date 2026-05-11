@@ -13,18 +13,24 @@ logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
 
-app = FastAPI(title="TinyWorld API", version="0.1.0")
+from contextlib import asynccontextmanager
+import subprocess
 
-@app.on_event("startup")
-async def run_migrations():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
     logger.info("Running migrations...")
     result = subprocess.run(
         ["alembic", "upgrade", "head"],
-        capture_output=True, text=True
+        capture_output=True, text=True, cwd="/app"
     )
     logger.info(result.stdout)
     if result.returncode != 0:
         logger.error(result.stderr)
+    yield
+    # Shutdown (để trống)
+
+app = FastAPI(title="TinyWorld API", version="0.1.0", lifespan=lifespan)
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
