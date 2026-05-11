@@ -1,10 +1,26 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Depends
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
+from app.core.database import get_db
 from app.routers import auth, character, afk, market, guild, world_boss
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
 
 app = FastAPI(title="TinyWorld API", version="0.1.0")
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled error: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "type": type(exc).__name__}
+    )
 
 app.include_router(auth.router)
 app.include_router(character.router)
@@ -13,6 +29,19 @@ app.include_router(market.router)
 app.include_router(guild.router)
 app.include_router(world_boss.router)
 
+from sqlalchemy import text
+
 @app.get("/health")
-async def health():
-    return {"status": "ok"}
+async def health(db: AsyncSession = Depends(get_db)):
+    # Kiểm tra DB connection
+    try:
+        await db.execute(text("SELECT 1"))
+        db_status = "ok"
+    except Exception:
+        db_status = "error"
+
+    return {
+        "status"  : "ok" if db_status == "ok" else "degraded",
+        "database": db_status,
+        "version" : "0.1.0",
+    }
